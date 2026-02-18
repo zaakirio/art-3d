@@ -164,6 +164,7 @@
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+        import { Reflector } from 'three/addons/objects/Reflector.js';
 
         // ─── CONFIG ───
         const GALLERY = {
@@ -171,8 +172,8 @@
             wallThickness: 0.3,
             floorY: 0,
             playerHeight: 1.7,
-            moveSpeed: 5,
-            sprintMultiplier: 1.8,
+            moveSpeed: 10,
+            sprintMultiplier: 2.5,
             artworkSize: { w: 2.0, h: 1.5 },
             spotlightIntensity: 8,
             spotlightDistance: 6,
@@ -209,7 +210,7 @@
         scene.fog = new THREE.FogExp2(0x050508, 0.015);
 
         const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, GALLERY.playerHeight, 12);
+        camera.position.set(0, GALLERY.playerHeight, 10);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -306,7 +307,7 @@
         }
 
         // Main Hall (large rectangular room)
-        const mainW = 30, mainD = 40;
+        const mainW = 20, mainD = 28;
         const t = GALLERY.wallThickness;
 
         // Floor
@@ -330,12 +331,19 @@
         reflectiveFloor.position.y = 0.001;
         scene.add(reflectiveFloor);
 
-        // Ceiling
-        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(mainW + 20, mainD + 20), ceilingMaterial);
-        ceiling.rotation.x = Math.PI / 2;
-        ceiling.position.y = GALLERY.wallHeight;
-        ceiling.receiveShadow = true;
-        scene.add(ceiling);
+        // Ceiling — planar mirror reflector
+        const ceilingReflector = new Reflector(
+            new THREE.PlaneGeometry(mainW + 20, mainD + 20),
+            {
+                color: new THREE.Color(0x222233),
+                textureWidth: 512,
+                textureHeight: 512,
+                clipBias: 0.003,
+            }
+        );
+        ceilingReflector.rotation.x = Math.PI / 2;
+        ceilingReflector.position.y = GALLERY.wallHeight;
+        scene.add(ceilingReflector);
 
         // Main hall walls
         // West wall (left) — with opening for west wing
@@ -353,11 +361,11 @@
         createWall(mainW / 4 + 1, mainD / 2, mainW / 2 - 2, t);
 
         // Center partition walls
-        createWall(-5, 0, t, 12);
-        createWall(5, 0, t, 12);
+        createWall(-4, 0, t, 8);
+        createWall(4, 0, t, 8);
 
         // West Wing
-        const wingW = 15, wingD = 20;
+        const wingW = 10, wingD = 14;
         createWall(-mainW / 2 - wingW, 0, t, wingD);  // far west wall
         createWall(-mainW / 2 - wingW / 2, -wingD / 2, wingW, t); // north wall of wing
         createWall(-mainW / 2 - wingW / 2, wingD / 2, wingW, t);  // south wall of wing
@@ -402,40 +410,40 @@
         // Define wall positions for artworks
         const artPositions = [
             // North wall (back of main hall) — 4 pieces
-            { x: -10, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
-            { x: -4, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
-            { x: 4, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
-            { x: 10, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
+            { x: -7,   y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
+            { x: -2.5, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
+            { x:  2.5, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
+            { x:  7,   y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
 
             // Center partition (left) — 3 pieces, east-facing side
-            { x: -5 + 0.25, y: 2.2, z: -4, rotY: Math.PI / 2 },
-            { x: -5 + 0.25, y: 2.2, z: 0, rotY: Math.PI / 2 },
-            { x: -5 + 0.25, y: 2.2, z: 4, rotY: Math.PI / 2 },
+            { x: -4 + 0.25, y: 2.2, z: -3, rotY: Math.PI / 2 },
+            { x: -4 + 0.25, y: 2.2, z:  0, rotY: Math.PI / 2 },
+            { x: -4 + 0.25, y: 2.2, z:  3, rotY: Math.PI / 2 },
 
             // Center partition (right) — 3 pieces, west-facing side
-            { x: 5 - 0.25, y: 2.2, z: -4, rotY: -Math.PI / 2 },
-            { x: 5 - 0.25, y: 2.2, z: 0, rotY: -Math.PI / 2 },
-            { x: 5 - 0.25, y: 2.2, z: 4, rotY: -Math.PI / 2 },
+            { x: 4 - 0.25, y: 2.2, z: -3, rotY: -Math.PI / 2 },
+            { x: 4 - 0.25, y: 2.2, z:  0, rotY: -Math.PI / 2 },
+            { x: 4 - 0.25, y: 2.2, z:  3, rotY: -Math.PI / 2 },
 
             // West wing — north wall
-            { x: -mainW / 2 - 4, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
-            { x: -mainW / 2 - 10, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
+            { x: -mainW / 2 - 3, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
+            { x: -mainW / 2 - 7, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
 
             // West wing — far wall
-            { x: -mainW / 2 - wingW + 0.25, y: 2.2, z: -4, rotY: Math.PI / 2 },
-            { x: -mainW / 2 - wingW + 0.25, y: 2.2, z: 4, rotY: Math.PI / 2 },
+            { x: -mainW / 2 - wingW + 0.25, y: 2.2, z: -3, rotY: Math.PI / 2 },
+            { x: -mainW / 2 - wingW + 0.25, y: 2.2, z:  3, rotY: Math.PI / 2 },
 
             // East wing — north wall
-            { x: mainW / 2 + 4, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
-            { x: mainW / 2 + 10, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
+            { x: mainW / 2 + 3, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
+            { x: mainW / 2 + 7, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
 
             // East wing — far wall
-            { x: mainW / 2 + wingW - 0.25, y: 2.2, z: -4, rotY: -Math.PI / 2 },
-            { x: mainW / 2 + wingW - 0.25, y: 2.2, z: 4, rotY: -Math.PI / 2 },
+            { x: mainW / 2 + wingW - 0.25, y: 2.2, z: -3, rotY: -Math.PI / 2 },
+            { x: mainW / 2 + wingW - 0.25, y: 2.2, z:  3, rotY: -Math.PI / 2 },
 
             // South wall flanks
-            { x: -10, y: 2.2, z: mainD / 2 - 0.25, rotY: Math.PI },
-            { x: 10, y: 2.2, z: mainD / 2 - 0.25, rotY: Math.PI },
+            { x: -7, y: 2.2, z: mainD / 2 - 0.25, rotY: Math.PI },
+            { x:  7, y: 2.2, z: mainD / 2 - 0.25, rotY: Math.PI },
         ];
 
         let loadedCount = 0;
@@ -685,10 +693,8 @@
                 position.z + spotOffset.z
             );
             spotlight.target.position.set(position.x, position.y, position.z);
-            spotlight.castShadow = true;
-            spotlight.shadow.mapSize.width = 512;
-            spotlight.shadow.mapSize.height = 512;
-            spotlight.shadow.bias = -0.001;
+            // Disable per-artwork shadows to avoid exceeding MAX_TEXTURE_IMAGE_UNITS
+            spotlight.castShadow = false;
             scene.add(spotlight);
             scene.add(spotlight.target);
 
@@ -807,7 +813,7 @@
             const ctx = minimapCtx;
             ctx.clearRect(0, 0, 150, 150);
 
-            const scale = 2.2;
+            const scale = 3.5;
             const cx = 75, cy = 75;
 
             ctx.fillStyle = 'rgba(20,20,25,0.9)';
@@ -946,9 +952,9 @@
         const particleCount = 500;
         const positions = new Float32Array(particleCount * 3);
         for (let i = 0; i < particleCount; i++) {
-            positions[i * 3] = (Math.random() - 0.5) * 60;
+            positions[i * 3] = (Math.random() - 0.5) * 45;
             positions[i * 3 + 1] = Math.random() * GALLERY.wallHeight;
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 35;
         }
         particlesGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         const particlesMat = new THREE.PointsMaterial({
