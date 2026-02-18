@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Art Gallery — A Virtual Museum Experience</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; font-family: 'Helvetica Neue', Arial, sans-serif; }
+        canvas { display: block; }
+
+        #blocker {
+            position: fixed; inset: 0; z-index: 1000;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%);
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column; cursor: pointer;
+            transition: opacity 0.8s ease;
+        }
+        #blocker.hidden { opacity: 0; pointer-events: none; }
+
+        .intro-content {
+            text-align: center; max-width: 700px; padding: 40px;
+        }
+        .gallery-title {
+            font-size: 4rem; font-weight: 100; letter-spacing: 12px;
+            color: #e8d5b7; text-transform: uppercase;
+            margin-bottom: 8px; line-height: 1.1;
+            text-shadow: 0 0 60px rgba(232,213,183,0.3);
+        }
+        .gallery-subtitle {
+            font-size: 1rem; letter-spacing: 6px; color: #8a7d6b;
+            text-transform: uppercase; margin-bottom: 50px;
+        }
+        .gallery-divider {
+            width: 60px; height: 1px; background: #e8d5b7;
+            margin: 0 auto 50px; opacity: 0.4;
+        }
+        .gallery-instruction {
+            font-size: 0.95rem; color: #6b6358; line-height: 2;
+            letter-spacing: 2px;
+        }
+        .gallery-instruction span { color: #c4a97d; font-weight: 500; }
+        .enter-text {
+            margin-top: 50px; font-size: 0.8rem; letter-spacing: 8px;
+            color: #4a4540; text-transform: uppercase;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        #crosshair {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 2px; height: 2px; background: rgba(232,213,183,0.5);
+            border-radius: 50%; z-index: 100; pointer-events: none;
+            box-shadow: 0 0 8px rgba(232,213,183,0.2);
+        }
+
+        #artwork-info {
+            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+            background: rgba(10,10,10,0.92); backdrop-filter: blur(20px);
+            border: 1px solid rgba(232,213,183,0.1);
+            padding: 20px 35px; border-radius: 2px;
+            z-index: 100; pointer-events: none;
+            opacity: 0; transition: opacity 0.5s ease;
+            text-align: center; min-width: 300px;
+        }
+        #artwork-info.visible { opacity: 1; }
+        #artwork-info .art-title {
+            font-size: 1.1rem; color: #e8d5b7; font-weight: 300;
+            letter-spacing: 2px; margin-bottom: 6px;
+        }
+        #artwork-info .art-artist {
+            font-size: 0.85rem; color: #a89880; letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        #artwork-info .art-details {
+            font-size: 0.75rem; color: #6b6358; letter-spacing: 1px;
+        }
+
+        #loading-screen {
+            position: fixed; inset: 0; z-index: 2000;
+            background: #0a0a0a;
+            display: flex; align-items: center; justify-content: center;
+            flex-direction: column;
+            transition: opacity 1s ease;
+        }
+        #loading-screen.hidden { opacity: 0; pointer-events: none; }
+        .loading-text {
+            font-size: 0.8rem; letter-spacing: 6px; color: #4a4540;
+            text-transform: uppercase; margin-bottom: 30px;
+        }
+        .loading-bar-container {
+            width: 200px; height: 1px; background: rgba(232,213,183,0.1);
+        }
+        .loading-bar {
+            width: 0%; height: 100%; background: #e8d5b7;
+            transition: width 0.3s ease;
+        }
+        .loading-count {
+            margin-top: 15px; font-size: 0.7rem; color: #3a3530;
+            letter-spacing: 3px;
+        }
+
+        #minimap {
+            position: fixed; top: 20px; right: 20px;
+            width: 150px; height: 150px;
+            background: rgba(10,10,10,0.8);
+            border: 1px solid rgba(232,213,183,0.15);
+            z-index: 100; border-radius: 2px;
+        }
+
+        #controls-hint {
+            position: fixed; bottom: 15px; right: 20px;
+            font-size: 0.65rem; color: #3a3530; letter-spacing: 2px;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-screen">
+        <div class="loading-text">Preparing Gallery</div>
+        <div class="loading-bar-container"><div class="loading-bar" id="loading-bar"></div></div>
+        <div class="loading-count" id="loading-count">0 / 0</div>
+    </div>
+
+    <div id="blocker">
+        <div class="intro-content">
+            <h1 class="gallery-title">Modern Art<br>Gallery</h1>
+            <p class="gallery-subtitle">A Virtual Museum Experience</p>
+            <div class="gallery-divider"></div>
+            <p class="gallery-instruction">
+                <span>W A S D</span> — Move<br>
+                <span>MOUSE</span> — Look Around<br>
+                <span>SHIFT</span> — Sprint
+            </p>
+            <p class="enter-text">Click to Enter</p>
+        </div>
+    </div>
+
+    <div id="crosshair"></div>
+    <div id="artwork-info">
+        <div class="art-title" id="art-title"></div>
+        <div class="art-artist" id="art-artist"></div>
+        <div class="art-details" id="art-details"></div>
+    </div>
+    <canvas id="minimap"></canvas>
+    <div id="controls-hint">W A S D &nbsp;&nbsp; MOUSE LOOK &nbsp;&nbsp; SHIFT SPRINT</div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.162.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+        // ─── CONFIG ───
+        const GALLERY = {
+            wallHeight: 5,
+            wallThickness: 0.3,
+            floorY: 0,
+            playerHeight: 1.7,
+            moveSpeed: 5,
+            sprintMultiplier: 1.8,
+            artworkSize: { w: 2.0, h: 1.5 },
+            spotlightIntensity: 8,
+            spotlightDistance: 6,
+            spotlightAngle: Math.PI / 5,
+        };
+
+        // ─── CURATED ARTWORKS ───
+        const ARTWORKS = [
+            { title: "Starry Night", artist: "Vincent van Gogh", year: "1889", origin: "Netherlands", metId: 436535, color: "#1a3a6a" },
+            { title: "Water Lilies", artist: "Claude Monet", year: "1906", origin: "France", metId: 437984, color: "#3a6b4a" },
+            { title: "The Great Wave", artist: "Katsushika Hokusai", year: "1831", origin: "Japan", metId: 45434, color: "#2a4a7a" },
+            { title: "Wheat Field with Cypresses", artist: "Vincent van Gogh", year: "1889", origin: "Netherlands", metId: 436524, color: "#5a7a3a" },
+            { title: "Bridge over a Pond of Water Lilies", artist: "Claude Monet", year: "1899", origin: "France", metId: 459106, color: "#2a5a3a" },
+            { title: "Self-Portrait with a Straw Hat", artist: "Vincent van Gogh", year: "1887", origin: "Netherlands", metId: 436532, color: "#7a6a3a" },
+            { title: "Autumn Rhythm (Number 30)", artist: "Jackson Pollock", year: "1950", origin: "United States", metId: 488978, color: "#4a3a2a" },
+            { title: "The Dance Class", artist: "Edgar Degas", year: "1874", origin: "France", metId: 438817, color: "#6a7a5a" },
+            { title: "Rouen Cathedral", artist: "Claude Monet", year: "1894", origin: "France", metId: 437119, color: "#8a7a5a" },
+            { title: "Cypresses", artist: "Vincent van Gogh", year: "1889", origin: "Netherlands", metId: 437980, color: "#3a5a2a" },
+            { title: "Houses at Auvers", artist: "Vincent van Gogh", year: "1890", origin: "Netherlands", metId: 436528, color: "#4a5a6a" },
+            { title: "Woman with a Parasol", artist: "Claude Monet", year: "1875", origin: "France", chicagoId: 16568, color: "#5a7a8a" },
+            { title: "The Bedroom", artist: "Vincent van Gogh", year: "1889", origin: "Netherlands", chicagoId: 28560, color: "#4a6a7a" },
+            { title: "A Sunday on La Grande Jatte", artist: "Georges Seurat", year: "1886", origin: "France", chicagoId: 27992, color: "#3a5a4a" },
+            { title: "Paris Street; Rainy Day", artist: "Gustave Caillebotte", year: "1877", origin: "France", chicagoId: 20684, color: "#5a5a6a" },
+            { title: "Nighthawks", artist: "Edward Hopper", year: "1942", origin: "United States", chicagoId: 111628, color: "#2a3a4a" },
+            { title: "American Gothic", artist: "Grant Wood", year: "1930", origin: "United States", chicagoId: 6565, color: "#5a4a3a" },
+            { title: "The Old Guitarist", artist: "Pablo Picasso", year: "1904", origin: "Spain", chicagoId: 28067, color: "#2a3a5a" },
+            { title: "Bathers by a River", artist: "Henri Matisse", year: "1917", origin: "France", chicagoId: 16362, color: "#6a5a4a" },
+            { title: "Sky Above Clouds IV", artist: "Georgia O'Keeffe", year: "1965", origin: "United States", chicagoId: 100858, color: "#7a8a9a" },
+        ];
+
+        // ─── SCENE SETUP ───
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050508);
+        scene.fog = new THREE.FogExp2(0x050508, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, GALLERY.playerHeight, 12);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.8;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
+        document.body.appendChild(renderer.domElement);
+
+        // ─── POST-PROCESSING ───
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.4, 0.5, 0.85
+        );
+        composer.addPass(bloomPass);
+        composer.addPass(new OutputPass());
+
+        // ─── CONTROLS ───
+        const controls = new PointerLockControls(camera, document.body);
+        const blocker = document.getElementById('blocker');
+
+        blocker.addEventListener('click', () => controls.lock());
+        controls.addEventListener('lock', () => blocker.classList.add('hidden'));
+        controls.addEventListener('unlock', () => blocker.classList.remove('hidden'));
+
+        const keys = { w: false, a: false, s: false, d: false, shift: false };
+        document.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = true;
+            if (k === 'a' || k === 'arrowleft') keys.a = true;
+            if (k === 's' || k === 'arrowdown') keys.s = true;
+            if (k === 'd' || k === 'arrowright') keys.d = true;
+            if (k === 'shift') keys.shift = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = false;
+            if (k === 'a' || k === 'arrowleft') keys.a = false;
+            if (k === 's' || k === 'arrowdown') keys.s = false;
+            if (k === 'd' || k === 'arrowright') keys.d = false;
+            if (k === 'shift') keys.shift = false;
+        });
+
+        // ─── MATERIALS ───
+        const floorMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1a1a1f,
+            roughness: 0.15,
+            metalness: 0.6,
+            envMapIntensity: 1.5,
+        });
+        const wallMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1c1c22,
+            roughness: 0.9,
+            metalness: 0.0,
+        });
+        const ceilingMaterial = new THREE.MeshStandardMaterial({
+            color: 0x0e0e12,
+            roughness: 1.0,
+            metalness: 0.0,
+        });
+        const frameMaterial = new THREE.MeshStandardMaterial({
+            color: 0x2a2520,
+            roughness: 0.4,
+            metalness: 0.3,
+        });
+        const benchMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1a1815,
+            roughness: 0.6,
+            metalness: 0.1,
+        });
+
+        // ─── GALLERY GEOMETRY ───
+        const wallColliders = [];
+
+        function createWall(x, z, width, depth, height = GALLERY.wallHeight) {
+            const geo = new THREE.BoxGeometry(width, height, depth);
+            const mesh = new THREE.Mesh(geo, wallMaterial);
+            mesh.position.set(x, height / 2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            wallColliders.push({
+                minX: x - width / 2 - 0.3,
+                maxX: x + width / 2 + 0.3,
+                minZ: z - depth / 2 - 0.3,
+                maxZ: z + depth / 2 + 0.3,
+            });
+            return mesh;
+        }
+
+        // Main Hall (large rectangular room)
+        const mainW = 30, mainD = 40;
+        const t = GALLERY.wallThickness;
+
+        // Floor
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(mainW + 20, mainD + 20), floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Reflective floor layer
+        const reflectiveFloor = new THREE.Mesh(
+            new THREE.PlaneGeometry(mainW + 20, mainD + 20),
+            new THREE.MeshStandardMaterial({
+                color: 0x1a1a1f,
+                roughness: 0.05,
+                metalness: 0.9,
+                transparent: true,
+                opacity: 0.15,
+            })
+        );
+        reflectiveFloor.rotation.x = -Math.PI / 2;
+        reflectiveFloor.position.y = 0.001;
+        scene.add(reflectiveFloor);
+
+        // Ceiling
+        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(mainW + 20, mainD + 20), ceilingMaterial);
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.y = GALLERY.wallHeight;
+        ceiling.receiveShadow = true;
+        scene.add(ceiling);
+
+        // Main hall walls
+        // West wall (left) — with opening for west wing
+        createWall(-mainW / 2, -mainD / 4 - 2.5, t, mainD / 2 - 5);
+        createWall(-mainW / 2, mainD / 4 + 2.5, t, mainD / 2 - 5);
+
+        // East wall (right) — with opening for east wing
+        createWall(mainW / 2, -mainD / 4 - 2.5, t, mainD / 2 - 5);
+        createWall(mainW / 2, mainD / 4 + 2.5, t, mainD / 2 - 5);
+
+        // North wall (back)
+        createWall(0, -mainD / 2, mainW + t, t);
+        // South wall (front, entrance)
+        createWall(-mainW / 4 - 1, mainD / 2, mainW / 2 - 2, t);
+        createWall(mainW / 4 + 1, mainD / 2, mainW / 2 - 2, t);
+
+        // Center partition walls
+        createWall(-5, 0, t, 12);
+        createWall(5, 0, t, 12);
+
+        // West Wing
+        const wingW = 15, wingD = 20;
+        createWall(-mainW / 2 - wingW, 0, t, wingD);  // far west wall
+        createWall(-mainW / 2 - wingW / 2, -wingD / 2, wingW, t); // north wall of wing
+        createWall(-mainW / 2 - wingW / 2, wingD / 2, wingW, t);  // south wall of wing
+
+        // East Wing
+        createWall(mainW / 2 + wingW, 0, t, wingD);
+        createWall(mainW / 2 + wingW / 2, -wingD / 2, wingW, t);
+        createWall(mainW / 2 + wingW / 2, wingD / 2, wingW, t);
+
+        // ─── LIGHTING ───
+
+        // Ambient — very subtle blue-gray
+        const ambient = new THREE.AmbientLight(0x151520, 0.6);
+        scene.add(ambient);
+
+        // Hemisphere — subtle sky/ground
+        const hemi = new THREE.HemisphereLight(0x1a1a30, 0x0a0a0a, 0.4);
+        scene.add(hemi);
+
+        // Ceiling track lights (warm dim)
+        for (let z = -mainD / 2 + 5; z <= mainD / 2 - 5; z += 8) {
+            for (let x = -mainW / 2 + 5; x <= mainW / 2 - 5; x += 10) {
+                const trackLight = new THREE.PointLight(0xfff0e0, 0.5, 12);
+                trackLight.position.set(x, GALLERY.wallHeight - 0.1, z);
+                scene.add(trackLight);
+
+                // Light fixture visual
+                const fixture = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.08, 0.12, 0.15, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.3, metalness: 0.8 })
+                );
+                fixture.position.set(x, GALLERY.wallHeight - 0.08, z);
+                scene.add(fixture);
+            }
+        }
+
+        // ─── ARTWORK PLACEMENT ───
+        const artworkObjects = [];
+        const artworkInfoData = [];
+        const textureLoader = new THREE.TextureLoader();
+
+        // Define wall positions for artworks
+        const artPositions = [
+            // North wall (back of main hall) — 4 pieces
+            { x: -10, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
+            { x: -4, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
+            { x: 4, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
+            { x: 10, y: 2.2, z: -mainD / 2 + 0.25, rotY: 0 },
+
+            // Center partition (left) — 3 pieces, east-facing side
+            { x: -5 + 0.25, y: 2.2, z: -4, rotY: Math.PI / 2 },
+            { x: -5 + 0.25, y: 2.2, z: 0, rotY: Math.PI / 2 },
+            { x: -5 + 0.25, y: 2.2, z: 4, rotY: Math.PI / 2 },
+
+            // Center partition (right) — 3 pieces, west-facing side
+            { x: 5 - 0.25, y: 2.2, z: -4, rotY: -Math.PI / 2 },
+            { x: 5 - 0.25, y: 2.2, z: 0, rotY: -Math.PI / 2 },
+            { x: 5 - 0.25, y: 2.2, z: 4, rotY: -Math.PI / 2 },
+
+            // West wing — north wall
+            { x: -mainW / 2 - 4, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
+            { x: -mainW / 2 - 10, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
+
+            // West wing — far wall
+            { x: -mainW / 2 - wingW + 0.25, y: 2.2, z: -4, rotY: Math.PI / 2 },
+            { x: -mainW / 2 - wingW + 0.25, y: 2.2, z: 4, rotY: Math.PI / 2 },
+
+            // East wing — north wall
+            { x: mainW / 2 + 4, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
+            { x: mainW / 2 + 10, y: 2.2, z: -wingD / 2 + 0.25, rotY: 0 },
+
+            // East wing — far wall
+            { x: mainW / 2 + wingW - 0.25, y: 2.2, z: -4, rotY: -Math.PI / 2 },
+            { x: mainW / 2 + wingW - 0.25, y: 2.2, z: 4, rotY: -Math.PI / 2 },
+
+            // South wall flanks
+            { x: -10, y: 2.2, z: mainD / 2 - 0.25, rotY: Math.PI },
+            { x: 10, y: 2.2, z: mainD / 2 - 0.25, rotY: Math.PI },
+        ];
+
+        let loadedCount = 0;
+        const totalArtworks = ARTWORKS.length;
+        const loadingBar = document.getElementById('loading-bar');
+        const loadingCount = document.getElementById('loading-count');
+        const loadingScreen = document.getElementById('loading-screen');
+        loadingCount.textContent = `0 / ${totalArtworks}`;
+
+        function createFrame(w, h) {
+            const frameGroup = new THREE.Group();
+            const frameDepth = 0.06;
+            const frameWidth = 0.08;
+
+            const parts = [
+                { pos: [0, h/2 + frameWidth/2, 0], size: [w + frameWidth*2, frameWidth, frameDepth] },
+                { pos: [0, -h/2 - frameWidth/2, 0], size: [w + frameWidth*2, frameWidth, frameDepth] },
+                { pos: [-w/2 - frameWidth/2, 0, 0], size: [frameWidth, h, frameDepth] },
+                { pos: [w/2 + frameWidth/2, 0, 0], size: [frameWidth, h, frameDepth] },
+            ];
+
+            parts.forEach(p => {
+                const geo = new THREE.BoxGeometry(...p.size);
+                const mesh = new THREE.Mesh(geo, frameMaterial);
+                mesh.position.set(...p.pos);
+                mesh.castShadow = true;
+                frameGroup.add(mesh);
+            });
+
+            return frameGroup;
+        }
+
+        function loadImageToTexture(url) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+
+                const timeout = setTimeout(() => {
+                    img.src = '';
+                    reject(new Error('Timeout'));
+                }, 8000);
+
+                img.onload = () => {
+                    clearTimeout(timeout);
+                    try {
+                        const c = document.createElement('canvas');
+                        const maxDim = 1024;
+                        const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+                        c.width = Math.round(img.naturalWidth * scale);
+                        c.height = Math.round(img.naturalHeight * scale);
+                        const ctx = c.getContext('2d');
+                        ctx.drawImage(img, 0, 0, c.width, c.height);
+                        const texture = new THREE.CanvasTexture(c);
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                        texture.minFilter = THREE.LinearMipmapLinearFilter;
+                        texture.magFilter = THREE.LinearFilter;
+                        texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                        resolve(texture);
+                    } catch (e) {
+                        reject(e);
+                    }
+                };
+                img.onerror = () => { clearTimeout(timeout); reject(new Error('Image load failed')); };
+                img.src = url;
+            });
+        }
+
+        // Use proxy if available (node server.js on port 3000), otherwise direct
+        const useProxy = location.port === '4200';
+        function proxyUrl(url) {
+            return useProxy ? `/proxy?url=${encodeURIComponent(url)}` : url;
+        }
+
+        async function getImageUrl(artwork) {
+            if (artwork.metId) {
+                const res = await fetch(`https://collectionapi.metmuseum.org/public/collection/v1/objects/${artwork.metId}`);
+                if (!res.ok) throw new Error('API error');
+                const data = await res.json();
+                const raw = data.primaryImageSmall || data.primaryImage;
+                return raw ? proxyUrl(raw) : null;
+            }
+            if (artwork.chicagoId) {
+                const res = await fetch(`https://api.artic.edu/api/v1/artworks/${artwork.chicagoId}?fields=id,title,image_id`);
+                if (!res.ok) throw new Error('API error');
+                const imageId = (await res.json()).data?.image_id;
+                if (!imageId) throw new Error('No image');
+                return proxyUrl(`https://www.artic.edu/iiif/2/${imageId}/full/843,/0/default.jpg`);
+            }
+            return null;
+        }
+
+        async function loadArtworkTexture(artwork) {
+            try {
+                const url = await getImageUrl(artwork);
+                if (!url) throw new Error('No image URL');
+                return await loadImageToTexture(url);
+            } catch (e) {
+                // Fallback: beautiful procedural art
+                return createProceduralArt(artwork);
+            }
+        }
+
+        function createProceduralArt(artwork) {
+            const W = 800, H = 600;
+            const canvas = document.createElement('canvas');
+            canvas.width = W;
+            canvas.height = H;
+            const ctx = canvas.getContext('2d');
+
+            // Parse base color
+            const hex = artwork.color;
+            const br = parseInt(hex.slice(1,3), 16);
+            const bg = parseInt(hex.slice(3,5), 16);
+            const bb = parseInt(hex.slice(5,7), 16);
+
+            // Rich gradient background
+            const grad = ctx.createRadialGradient(W*0.4, H*0.3, 50, W*0.5, H*0.5, W*0.7);
+            grad.addColorStop(0, `rgb(${Math.min(br+60,255)}, ${Math.min(bg+60,255)}, ${Math.min(bb+60,255)})`);
+            grad.addColorStop(0.5, artwork.color);
+            grad.addColorStop(1, `rgb(${Math.max(br-40,0)}, ${Math.max(bg-40,0)}, ${Math.max(bb-40,0)})`);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, W, H);
+
+            // Seeded RNG
+            const seed = artwork.title.split('').reduce((a,c) => a + c.charCodeAt(0), 0) * 7 + parseInt(artwork.year) * 3;
+            let s = seed;
+            const rng = () => { s = (s * 16807 + 0) % 2147483647; return s / 2147483647; };
+
+            // Layer 1: large soft washes
+            for (let i = 0; i < 8; i++) {
+                const g2 = ctx.createRadialGradient(
+                    rng()*W, rng()*H, 0,
+                    rng()*W, rng()*H, rng()*300 + 100
+                );
+                const r = Math.floor(rng()*255), g = Math.floor(rng()*255), b = Math.floor(rng()*255);
+                g2.addColorStop(0, `rgba(${r},${g},${b},${rng()*0.3+0.05})`);
+                g2.addColorStop(1, `rgba(${r},${g},${b},0)`);
+                ctx.fillStyle = g2;
+                ctx.fillRect(0, 0, W, H);
+            }
+
+            // Layer 2: geometric forms
+            for (let i = 0; i < 15; i++) {
+                const r = Math.floor(rng()*200+55), g = Math.floor(rng()*200+55), b = Math.floor(rng()*200+55);
+                ctx.fillStyle = `rgba(${r},${g},${b},${rng()*0.25+0.05})`;
+                ctx.strokeStyle = `rgba(${r},${g},${b},${rng()*0.15+0.05})`;
+                ctx.lineWidth = rng() * 3 + 0.5;
+
+                const shape = rng();
+                ctx.beginPath();
+                if (shape < 0.3) {
+                    ctx.arc(rng()*W, rng()*H, rng()*100+20, 0, Math.PI*2);
+                } else if (shape < 0.6) {
+                    const cx = rng()*W, cy = rng()*H, sz = rng()*120+30;
+                    ctx.moveTo(cx, cy - sz); ctx.lineTo(cx + sz, cy + sz); ctx.lineTo(cx - sz, cy + sz);
+                    ctx.closePath();
+                } else {
+                    ctx.rect(rng()*W - 60, rng()*H - 60, rng()*150+30, rng()*150+30);
+                }
+                ctx.fill();
+                if (rng() > 0.5) ctx.stroke();
+            }
+
+            // Layer 3: fine texture lines
+            ctx.globalAlpha = 0.08;
+            for (let i = 0; i < 40; i++) {
+                ctx.strokeStyle = rng() > 0.5 ? '#fff' : '#000';
+                ctx.lineWidth = rng() * 1.5;
+                ctx.beginPath();
+                ctx.moveTo(rng()*W, rng()*H);
+                ctx.quadraticCurveTo(rng()*W, rng()*H, rng()*W, rng()*H);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
+            return texture;
+        }
+
+        async function placeArtwork(artwork, position, index) {
+            const texture = await loadArtworkTexture(artwork);
+
+            // Calculate aspect ratio from texture
+            let artW = GALLERY.artworkSize.w;
+            let artH = GALLERY.artworkSize.h;
+            if (texture.image) {
+                const aspect = texture.image.width / texture.image.height;
+                if (aspect > 1) {
+                    artH = artW / aspect;
+                } else {
+                    artW = artH * aspect;
+                }
+                // Clamp size
+                artW = Math.min(artW, 2.5);
+                artH = Math.min(artH, 2.0);
+            }
+
+            const group = new THREE.Group();
+
+            // Canvas (the painting)
+            const canvasMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(artW, artH),
+                new THREE.MeshStandardMaterial({
+                    map: texture,
+                    roughness: 0.7,
+                    metalness: 0.0,
+                })
+            );
+            canvasMesh.castShadow = true;
+            canvasMesh.receiveShadow = true;
+            group.add(canvasMesh);
+
+            // Frame
+            const frame = createFrame(artW, artH);
+            group.add(frame);
+
+            // Backing
+            const backing = new THREE.Mesh(
+                new THREE.PlaneGeometry(artW + 0.02, artH + 0.02),
+                new THREE.MeshStandardMaterial({ color: 0x0a0a0a })
+            );
+            backing.position.z = -0.02;
+            group.add(backing);
+
+            // Position on wall
+            group.position.set(position.x, position.y, position.z);
+            group.rotation.y = position.rotY;
+            scene.add(group);
+
+            // Spotlight for this artwork
+            const spotDir = new THREE.Vector3(0, 0, 0);
+            // Calculate spot position: above and in front of the artwork
+            const spotOffset = new THREE.Vector3(0, 1.8, 1.5);
+            spotOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), position.rotY);
+
+            const spotlight = new THREE.SpotLight(
+                0xfff5e8,
+                GALLERY.spotlightIntensity,
+                GALLERY.spotlightDistance,
+                GALLERY.spotlightAngle,
+                0.6, 1.5
+            );
+            spotlight.position.set(
+                position.x + spotOffset.x,
+                position.y + spotOffset.y,
+                position.z + spotOffset.z
+            );
+            spotlight.target.position.set(position.x, position.y, position.z);
+            spotlight.castShadow = true;
+            spotlight.shadow.mapSize.width = 512;
+            spotlight.shadow.mapSize.height = 512;
+            spotlight.shadow.bias = -0.001;
+            scene.add(spotlight);
+            scene.add(spotlight.target);
+
+            // Spotlight fixture
+            const fixtureGeo = new THREE.CylinderGeometry(0.03, 0.06, 0.12, 6);
+            const fixtureMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9, roughness: 0.2 });
+            const fixtureMesh = new THREE.Mesh(fixtureGeo, fixtureMat);
+            fixtureMesh.position.copy(spotlight.position);
+            fixtureMesh.lookAt(position.x, position.y, position.z);
+            scene.add(fixtureMesh);
+
+            // Store for raycasting
+            artworkObjects.push(canvasMesh);
+            artworkInfoData.push({
+                title: artwork.title,
+                artist: artwork.artist,
+                year: artwork.year,
+                origin: artwork.origin,
+                position: new THREE.Vector3(position.x, position.y, position.z),
+            });
+
+            loadedCount++;
+            const pct = (loadedCount / totalArtworks) * 100;
+            loadingBar.style.width = pct + '%';
+            loadingCount.textContent = `${loadedCount} / ${totalArtworks}`;
+        }
+
+        // ─── DECORATIVE ELEMENTS ───
+        function createBench(x, z, rotY = 0) {
+            const bench = new THREE.Group();
+            const seatGeo = new THREE.BoxGeometry(1.8, 0.08, 0.5);
+            const seat = new THREE.Mesh(seatGeo, benchMaterial);
+            seat.position.y = 0.45;
+            seat.castShadow = true;
+            bench.add(seat);
+
+            // Legs
+            const legGeo = new THREE.BoxGeometry(0.06, 0.45, 0.06);
+            [[-0.8, 0.225, -0.18], [-0.8, 0.225, 0.18], [0.8, 0.225, -0.18], [0.8, 0.225, 0.18]].forEach(p => {
+                const leg = new THREE.Mesh(legGeo, benchMaterial);
+                leg.position.set(...p);
+                leg.castShadow = true;
+                bench.add(leg);
+            });
+
+            bench.position.set(x, 0, z);
+            bench.rotation.y = rotY;
+            scene.add(bench);
+        }
+
+        createBench(0, -8);
+        createBench(0, 8);
+        createBench(-mainW / 2 - wingW / 2, 0, Math.PI / 2);
+        createBench(mainW / 2 + wingW / 2, 0, Math.PI / 2);
+
+        // Floor line guides (subtle)
+        function createFloorLine(x1, z1, x2, z2) {
+            const points = [new THREE.Vector3(x1, 0.005, z1), new THREE.Vector3(x2, 0.005, z2)];
+            const geo = new THREE.BufferGeometry().setFromPoints(points);
+            const mat = new THREE.LineBasicMaterial({ color: 0x252530, transparent: true, opacity: 0.3 });
+            scene.add(new THREE.Line(geo, mat));
+        }
+        createFloorLine(-mainW / 2, 0, mainW / 2, 0);
+        createFloorLine(0, -mainD / 2, 0, mainD / 2);
+
+        // Decorative columns at main hall corners
+        function createColumn(x, z) {
+            const geo = new THREE.CylinderGeometry(0.25, 0.3, GALLERY.wallHeight, 12);
+            const mat = new THREE.MeshStandardMaterial({ color: 0x1e1e24, roughness: 0.5, metalness: 0.3 });
+            const col = new THREE.Mesh(geo, mat);
+            col.position.set(x, GALLERY.wallHeight / 2, z);
+            col.castShadow = true;
+            col.receiveShadow = true;
+            scene.add(col);
+
+            // Base
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.35, 0.4, 0.2, 12),
+                mat
+            );
+            base.position.set(x, 0.1, z);
+            scene.add(base);
+
+            // Capital
+            const cap = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.4, 0.25, 0.15, 12),
+                mat
+            );
+            cap.position.set(x, GALLERY.wallHeight - 0.08, z);
+            scene.add(cap);
+
+            wallColliders.push({
+                minX: x - 0.5, maxX: x + 0.5,
+                minZ: z - 0.5, maxZ: z + 0.5,
+            });
+        }
+
+        createColumn(-mainW / 2 + 1.5, -mainD / 2 + 1.5);
+        createColumn(mainW / 2 - 1.5, -mainD / 2 + 1.5);
+        createColumn(-mainW / 2 + 1.5, mainD / 2 - 1.5);
+        createColumn(mainW / 2 - 1.5, mainD / 2 - 1.5);
+
+        // Wing entrance columns
+        createColumn(-mainW / 2, -5);
+        createColumn(-mainW / 2, 5);
+        createColumn(mainW / 2, -5);
+        createColumn(mainW / 2, 5);
+
+        // ─── MINIMAP ───
+        const minimapCanvas = document.getElementById('minimap');
+        const minimapCtx = minimapCanvas.getContext('2d');
+        minimapCanvas.width = 150;
+        minimapCanvas.height = 150;
+
+        function drawMinimap() {
+            const ctx = minimapCtx;
+            ctx.clearRect(0, 0, 150, 150);
+
+            const scale = 2.2;
+            const cx = 75, cy = 75;
+
+            ctx.fillStyle = 'rgba(20,20,25,0.9)';
+            ctx.fillRect(0, 0, 150, 150);
+
+            // Draw walls
+            ctx.strokeStyle = 'rgba(232,213,183,0.2)';
+            ctx.lineWidth = 1;
+            wallColliders.forEach(w => {
+                const x = cx + (w.minX + w.maxX) / 2 * scale;
+                const y = cy + (w.minZ + w.maxZ) / 2 * scale;
+                const ww = (w.maxX - w.minX) * scale;
+                const hh = (w.maxZ - w.minZ) * scale;
+                ctx.strokeRect(x - ww/2, y - hh/2, ww, hh);
+            });
+
+            // Player position
+            const px = cx + camera.position.x * scale;
+            const py = cy + camera.position.z * scale;
+            ctx.fillStyle = '#e8d5b7';
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Direction indicator
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            ctx.strokeStyle = '#e8d5b7';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(px + dir.x * 8, py + dir.z * 8);
+            ctx.stroke();
+
+            // Artwork dots
+            ctx.fillStyle = 'rgba(200,170,120,0.5)';
+            artworkInfoData.forEach(a => {
+                const ax = cx + a.position.x * scale;
+                const ay = cy + a.position.z * scale;
+                ctx.beginPath();
+                ctx.arc(ax, ay, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        // ─── ARTWORK INFO HUD ───
+        const artInfoEl = document.getElementById('artwork-info');
+        const artTitleEl = document.getElementById('art-title');
+        const artArtistEl = document.getElementById('art-artist');
+        const artDetailsEl = document.getElementById('art-details');
+        const raycaster = new THREE.Raycaster();
+        raycaster.far = 5;
+
+        function updateArtworkInfo() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const intersects = raycaster.intersectObjects(artworkObjects);
+
+            if (intersects.length > 0) {
+                const idx = artworkObjects.indexOf(intersects[0].object);
+                if (idx >= 0) {
+                    const info = artworkInfoData[idx];
+                    artTitleEl.textContent = info.title;
+                    artArtistEl.textContent = info.artist;
+                    artDetailsEl.textContent = `${info.year} — ${info.origin}`;
+                    artInfoEl.classList.add('visible');
+                    return;
+                }
+            }
+            artInfoEl.classList.remove('visible');
+        }
+
+        // ─── COLLISION DETECTION ───
+        function checkCollision(newX, newZ) {
+            const radius = 0.4;
+            for (const wall of wallColliders) {
+                const closestX = Math.max(wall.minX, Math.min(newX, wall.maxX));
+                const closestZ = Math.max(wall.minZ, Math.min(newZ, wall.maxZ));
+                const dx = newX - closestX;
+                const dz = newZ - closestZ;
+                if (dx * dx + dz * dz < radius * radius) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // ─── MOVEMENT ───
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        const clock = new THREE.Clock();
+
+        function updateMovement(delta) {
+            if (!controls.isLocked) return;
+
+            const speed = GALLERY.moveSpeed * (keys.shift ? GALLERY.sprintMultiplier : 1);
+
+            // Damping
+            velocity.x -= velocity.x * 8.0 * delta;
+            velocity.z -= velocity.z * 8.0 * delta;
+
+            direction.z = Number(keys.w) - Number(keys.s);
+            direction.x = Number(keys.d) - Number(keys.a);
+            direction.normalize();
+
+            if (keys.w || keys.s) velocity.z -= direction.z * speed * delta;
+            if (keys.a || keys.d) velocity.x -= direction.x * speed * delta;
+
+            // Calculate new position
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            forward.y = 0;
+            forward.normalize();
+
+            const right = new THREE.Vector3();
+            right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+            const moveX = right.x * (-velocity.x * delta) + forward.x * (-velocity.z * delta);
+            const moveZ = right.z * (-velocity.x * delta) + forward.z * (-velocity.z * delta);
+
+            const newX = camera.position.x + moveX;
+            const newZ = camera.position.z + moveZ;
+
+            // Slide along walls
+            if (!checkCollision(newX, camera.position.z)) {
+                camera.position.x = newX;
+            }
+            if (!checkCollision(camera.position.x, newZ)) {
+                camera.position.z = newZ;
+            }
+
+            camera.position.y = GALLERY.playerHeight;
+        }
+
+        // ─── AMBIENT PARTICLES ───
+        const particlesGeo = new THREE.BufferGeometry();
+        const particleCount = 500;
+        const positions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 60;
+            positions[i * 3 + 1] = Math.random() * GALLERY.wallHeight;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 60;
+        }
+        particlesGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const particlesMat = new THREE.PointsMaterial({
+            color: 0xe8d5b7,
+            size: 0.02,
+            transparent: true,
+            opacity: 0.3,
+            sizeAttenuation: true,
+        });
+        const particles = new THREE.Points(particlesGeo, particlesMat);
+        scene.add(particles);
+
+        // ─── LOAD ALL ARTWORKS ───
+        async function initGallery() {
+            const promises = ARTWORKS.map((artwork, i) => {
+                const pos = artPositions[i % artPositions.length];
+                return placeArtwork(artwork, pos, i);
+            });
+
+            await Promise.allSettled(promises);
+
+            // Hide loading, show blocker
+            setTimeout(() => {
+                loadingScreen.classList.add('hidden');
+                setTimeout(() => loadingScreen.style.display = 'none', 1000);
+            }, 500);
+        }
+
+        // ─── ANIMATION LOOP ───
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            updateMovement(delta);
+            updateArtworkInfo();
+
+            // Gentle particle drift
+            const posArr = particles.geometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                posArr[i * 3 + 1] += Math.sin(Date.now() * 0.0003 + i) * 0.0003;
+                if (posArr[i * 3 + 1] > GALLERY.wallHeight) posArr[i * 3 + 1] = 0;
+            }
+            particles.geometry.attributes.position.needsUpdate = true;
+
+            composer.render();
+            drawMinimap();
+        }
+
+        // ─── RESIZE ───
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ─── START ───
+        initGallery();
+        animate();
+    </script>
+</body>
+</html>
